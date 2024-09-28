@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat en Tiempo Real</title>
+    
+    <style>
+        body {
+    font-family: 'Arial', sans-serif;
+    background-color: #f0f0f5;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+    transition: background-color 0.3s; 
+}
+
+#username-form {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    max-width: 400px;
+    padding: 20px;
+    background-color: white;
+    border-radius: 20px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+#chat {
+    display: none;
+    width: 100%;
+    max-width: 400px; 
+    height: 500px;
+    border-radius: 20px; 
+    background-color: #ffffff; 
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+}
+
+#messages {
+    list-style-type: none;
+    padding: 10px;
+    height: 400px; 
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column; 
+    gap: 10px; 
+}
+
+li {
+    padding: 10px 15px;
+    border-radius: 20px; 
+    max-width: 75%; 
+    word-wrap: break-word; 
+}
+
+.my-message {
+    background-color: #007aff; 
+    color: white; 
+    align-self: flex-end; 
+}
+
+.other-message {
+    background-color: #e5e5ea; 
+    color: black; 
+    align-self: flex-start; 
+}
+
+input[type="text"], input[type="file"] {
+    padding: 15px;
+    border: 1px solid #ccc; 
+    border-radius: 20px; 
+    width: 100%; 
+    margin-bottom: 10px; 
+    font-size: 16px; 
+}
+
+button {
+    padding: 10px; 
+    background-color: #007aff; 
+    color: white; 
+    border: none;
+    border-radius: 20px; 
+    cursor: pointer;
+    width: 100%; 
+    font-size: 16px; 
+    transition: background-color 0.3s; 
+}
+
+button:hover {
+    background-color: #0051a1; 
+}
+
+@media (max-width: 600px) {
+    #username-form, #chat {
+        max-width: 90%; 
+        padding: 10px; 
+    }
+
+    li {
+        font-size: 14px; 
+    }
+
+    input[type="text"], button {
+        font-size: 14px; 
+    }
+}
+
+.time-text {
+    display: block;
+    font-size: 12px; 
+    color: gray; 
+    margin-top: 4px; 
+}
+
+.image-message {
+    max-width: 100%;
+    border-radius: 10px;
+    margin-top: 5px;
+}
+    </style>
+</head>
+<body>
+    <div id="username-form">
+        <input id="username-input" type="text" placeholder="Introduce tu nombre" />
+        <select id="room-select">
+            <option value="general">General</option>
+            <option value="deportes">Deportes</option>
+            <option value="tecnología">Tecnología</option>
+        </select>
+        <button id="username-button">Entrar</button>
+    </div>
+    <div id="chat">
+        <ul id="messages"></ul>
+        <form id="form" action="">
+            <input id="input" type="text" autocomplete="off" placeholder="Escribe un mensaje..." />
+            <button>Enviar</button>
+        </form>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        var socket = io();
+        var username = '';
+
+        var usernameForm = document.getElementById('username-form');
+        var usernameInput = document.getElementById('username-input');
+        var usernameButton = document.getElementById('username-button');
+        var chat = document.getElementById('chat');
+        var form = document.getElementById('form');
+        var input = document.getElementById('input');
+        var messages = document.getElementById('messages');
+        var roomSelect = document.getElementById('room-select');
+
+        usernameButton.addEventListener('click', joinChat);
+        usernameInput.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                joinChat();
+            }
+        });
+
+        function joinChat() {
+            username = usernameInput.value.trim();
+            var room = roomSelect.value;
+            if (username) {
+                socket.emit('set username', username);
+                socket.emit('join room', room);
+                usernameForm.style.display = 'none';
+                chat.style.display = 'block';
+            }
+        }
+
+        function detectMention(message) {
+            const mentionRegex = /@(\w+)/g;
+            let mentions = [];
+            let match;
+            while (match = mentionRegex.exec(message)) {
+                mentions.push(match[1]);
+            }
+            return mentions;
+        }
+
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            if (input.value) {
+                const mentions = detectMention(input.value);
+                socket.emit('chat message', { text: input.value, mentions });
+                input.value = '';
+            }
+        });
+
+        socket.on('chat message', function(msg) {
+            var item = document.createElement('li');
+            
+            var messageText = document.createElement('span');
+            messageText.textContent = `${msg.username}: ${msg.message}`; // Mostrar usuario y mensaje
+            messageText.className = 'message-text'; // Clase para el texto del mensaje
+            item.appendChild(messageText);
+
+            var timeText = document.createElement('span');
+            var time = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); // Obtener hora y minutos
+            timeText.textContent = time; // Mostrar hora
+            timeText.className = 'time-text'; // Clase para el texto de la hora
+            item.appendChild(timeText);
+
+            if (msg.username === username) {
+                item.classList.add('my-message');
+            } else {
+                item.classList.add('other-message');
+            }
+
+            messages.appendChild(item);
+            messages.scrollTop = messages.scrollHeight;
+        });
+    </script>
+</body>
+</html>
